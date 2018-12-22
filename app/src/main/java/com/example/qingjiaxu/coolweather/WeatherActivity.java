@@ -2,18 +2,27 @@ package com.example.qingjiaxu.coolweather;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.media.Image;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.speech.tts.TextToSpeech;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
@@ -28,6 +37,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RemoteViews;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -108,6 +118,8 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
 
     private AutoUpdateService autoUpdateService;
 
+    private RemoteViews remoteViews;
+
     private static final String TAG = "WeatherActivity";
 
     private ServiceConnection serviceConnection = new ServiceConnection() {
@@ -140,6 +152,9 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
         getWindow().setStatusBarColor(Color.TRANSPARENT);
 
         setContentView(R.layout.activity_weather);
+
+        remoteViews = new RemoteViews(this.getPackageName(), R.layout.notification_layout);
+        //getNotificationManager().notify(1, getNotification(weatherImageResource("大雨")));
 
         weatherLayout = findViewById(R.id.weather_layout);
         titleCity = findViewById(R.id.title_city);
@@ -277,6 +292,7 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
         String weatherInfo = weather.now.more.info;
         String windDirection = weather.now.windDirection;
         String windForce = weather.now.windForce + "级";
+        String pm25 = "";
         final String[] UPDATE_INTERVAL = new String[]{"1小时", "3小时", "5小时", "8小时", "1天", "3天"};
         String maxTemperature = null;
         String minTemperature = null;
@@ -289,7 +305,7 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
         windDirectionText.setText(windDirection);
         windForceText.setText(windForce);
 
-        setWeatherImageResource(weatherInfo);
+        weatherImage.setImageResource(weatherImageResource(weatherInfo));
 
         forecastLayout.removeAllViews();
 
@@ -304,9 +320,10 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
         }
         
         if (weather.aqi != null) {
-            aqiText.setText(weather.aqi.city.aqi);
-            pm25Text.setText(weather.aqi.city.pm25);
+            pm25 = weather.aqi.city.pm25;
             pollutionInfo = weather.aqi.city.quality;
+            aqiText.setText(pm25);
+            pm25Text.setText(pollutionInfo);
         }
         else {
             Toast.makeText(this, "空气质量请求失败", Toast.LENGTH_SHORT).show();
@@ -322,6 +339,11 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
         final String message = "和风天气为您播报," + cityName + "区,今天白天到晚间," + weatherInfo
                 + ",最高温," + maxTemperature + ",最低温," + minTemperature + "," + windDirection
                 + "," + windForce + ",空气质量" + pollutionInfo;
+
+        String temperatureRange = minTemperature + "~" + maxTemperature;
+
+        getNotificationManager().notify(1, getNotification(weatherImageResource(weatherInfo),
+                cityName, degree, temperatureRange, weatherInfo, pm25, pollutionInfo, updateTime));
 
         speakBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -433,26 +455,35 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
 
     }
 
-    private void setWeatherImageResource(String weather) {
+    private int weatherImageResource(String weather) {
         if (weather.equals("晴"))
-            weatherImage.setImageResource(R.drawable.sunny);
+            //weatherImage.setImageResource(R.drawable.sunny);
+            return R.drawable.sunny;
         else if (weather.equals("多云"))
-            weatherImage.setImageResource(R.drawable.sunny_cloudy);
+            //weatherImage.setImageResource(R.drawable.sunny_cloudy);
+            return R.drawable.sunny_cloudy;
         else if (weather.equals("阴"))
-            weatherImage.setImageResource(R.drawable.cloudy);
+            //weatherImage.setImageResource(R.drawable.cloudy);
+            return R.drawable.cloudy;
         else if (weather.equals("小雨"))
-            weatherImage.setImageResource(R.drawable.drizzle);
+            //weatherImage.setImageResource(R.drawable.drizzle);
+            return R.drawable.drizzle;
         else if (weather.equals("大雨"))
-            weatherImage.setImageResource(R.drawable.heavy_rain);
+            //weatherImage.setImageResource(R.drawable.heavy_rain);
+            return R.drawable.heavy_rain;
         else if (weather.equals("雷阵雨"))
-            weatherImage.setImageResource(R.drawable.thunder_shower);
+            //weatherImage.setImageResource(R.drawable.thunder_shower);
+            return R.drawable.thunder_shower;
         else if (weather.equals("强雷阵雨"))
-            weatherImage.setImageResource(R.drawable.heavy_thunder_storm);
+            //weatherImage.setImageResource(R.drawable.heavy_thunder_storm);
+            return R.drawable.heavy_thunder_storm;
         else if (weather.equals("霾"))
-            weatherImage.setImageResource(R.drawable.foggy);
+            //weatherImage.setImageResource(R.drawable.foggy);
+            return R.drawable.foggy;
         else if (weather.equals("雪"))
-            weatherImage.setImageResource(R.drawable.snowy);
-
+            //weatherImage.setImageResource(R.drawable.snowy);
+            return R.drawable.snowy;
+        else return R.drawable.clear_night;
     }
     
     private void setForecastLayoutView(List<Forecast> list) {
@@ -568,6 +599,64 @@ public class WeatherActivity extends AppCompatActivity implements TextToSpeech.O
                 break;
             default:
         }
+    }
+
+    private NotificationManager getNotificationManager() {
+        return (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+    }
+
+    private Notification getNotification(int imageId, String city, String temperature, String range, String weather,
+                                        String pm25, String quality, String update) {
+
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setAction(Intent.ACTION_MAIN);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this,0, intent,0);
+        Notification.Builder builder;
+        // 获取remoteViews（参数一：包名；参数二：布局资源）
+//        remoteViews.setTextViewText(R.id.item_tv1, name);
+//        remoteViews.setTextViewText(R.id.item_tv2, singer);
+//        remoteViews.setOnClickPendingIntent(R.id.play, pendButtonIntent1);
+//        remoteViews.setOnClickPendingIntent(R.id.stop, pendButtonIntent2);
+        remoteViews.setImageViewResource(R.id.notification_image, imageId);
+        remoteViews.setTextViewText(R.id.notification_city, city);
+        remoteViews.setTextViewText(R.id.notification_temperature, temperature);
+        remoteViews.setTextViewText(R.id.notification_range, range);
+        remoteViews.setTextViewText(R.id.notification_weather, weather);
+        remoteViews.setTextViewText(R.id.notification_pm25, pm25);
+        remoteViews.setTextViewText(R.id.notification_quality, quality);
+        remoteViews.setTextViewText(R.id.notification_update, update);
+
+        NotificationManager manager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+
+        if(Build.VERSION.SDK_INT >= 26)
+        {
+            //当sdk版本大于26
+            String id = "channel_1";
+            String description = "143";
+            int importance = getNotificationManager().IMPORTANCE_LOW;
+            NotificationChannel channel = new NotificationChannel(id, description, importance);
+//                     channel.enableLights(true);
+//                     channel.enableVibration(true);//
+            manager.createNotificationChannel(channel);
+            builder = new Notification.Builder(this, id)
+                    .setCategory(Notification.CATEGORY_MESSAGE)
+                    .setSmallIcon(R.drawable.logo)
+                    .setContent(remoteViews)
+                    .setDefaults(NotificationCompat.DEFAULT_ALL)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true);
+
+        }
+        else
+        {
+            //当sdk版本小于26
+            builder = new Notification.Builder(this)
+                    .setContentTitle("This is content title")
+                    .setContentText("This is content text")
+                    .setContentIntent(pendingIntent)
+                    .setSmallIcon(R.mipmap.ic_launcher);
+        }
+        return builder.build();
     }
 
 }
